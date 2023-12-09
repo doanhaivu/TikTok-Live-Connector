@@ -1,12 +1,18 @@
 {
     "include": [
-        "src/**/*"
+      "src/**/*",
+      "app/**/*"
     ],
     "compilerOptions": {
-        "allowJs": true,
-        "declaration": true,
-        "emitDeclarationOnly": true,
-        "outDir": "dist",
-        "declarationMap": true
+      "allowJs": true,
+      "outDir": "dist",
+      "rootDir": ".",
+      "esModuleInterop": true,
+      "moduleResolution": "node",
+      "target": "es6",
+      "module": "commonjs",
+      "sourceMap": true,
+      // ... other necessary options
     }
 }
+  

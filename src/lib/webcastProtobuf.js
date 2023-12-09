@@ -2,8 +2,10 @@ const protobufjs = require('protobufjs');
 const util = require('node:util');
 const zlib = require('node:zlib');
 const unzip = util.promisify(zlib.unzip);
+const path = require('path');
 
-let tiktokSchemaPath = require.resolve('../proto/tiktokSchema.proto');
+// let tiktokSchemaPath = require.resolve('../proto/tiktokSchema.proto');
+let tiktokSchemaPath = path.resolve(__dirname, '../proto/tiktokSchema.proto');
 let tiktokSchema = null;
 let config = {
     skipMessageTypes: [],
