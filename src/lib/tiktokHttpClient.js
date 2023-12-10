@@ -4,7 +4,15 @@ const { deserializeMessage } = require('./webcastProtobuf.js');
 const { signWebcastRequest } = require('./tiktokSignatureProvider');
 
 const Config = require('./webcastConfig.js');
-
+const proxy = {
+    protocol: 'http',
+    host: 'api.zyte.com',
+    port: 8011,
+    auth: {
+        username: '',
+        password: ''
+    }
+};
 class TikTokHttpClient {
     constructor(customHeaders, axiosOptions, sessionId) {
         const { Cookie } = customHeaders || {};
@@ -37,6 +45,29 @@ class TikTokHttpClient {
         return this.axiosInstance.get(url, { responseType });
     }
 
+    #zyteProxyGet(url, responseType) {
+        return this.axiosInstance.get(url, { responseType, proxy });
+    }
+
+    #zyteGet(url, responseType) {
+        return this.axiosInstance.post(
+            'https://api.zyte.com/v1/extract',
+            { 
+                url,
+                "httpResponseBody": true,
+            },
+            {
+                auth: { username: '' }
+            }
+        ).then((response) => { 
+            const httpResponseBody = Buffer.from(
+              response.data.httpResponseBody, 
+              "base64"
+            )
+            return httpResponseBody;
+        });
+    }
+
     #post(url, params, data, responseType) {
         return this.axiosInstance.post(url, data, { params, responseType });
     }
@@ -58,7 +89,7 @@ class TikTokHttpClient {
     }
 
     async getMainPage(path) {
-        let response = await this.#get(`${Config.TIKTOK_URL_WEB}${path}`);
+        let response = await this.#zyteGet(`${Config.TIKTOK_URL_WEB}${path}`);
         return response.data;
     }
 
