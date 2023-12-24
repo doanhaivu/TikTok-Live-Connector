@@ -129,7 +129,7 @@ class WebcastPushConnection extends EventEmitter {
      * @param {string} [roomId] If you want to connect to a specific roomId. Otherwise the current roomId will be retrieved.
      * @returns {Promise} Promise that will be resolved when the connection is established.
      */
-    async connect(roomId = null) {
+    async connect(roomId = null, zyte = false, zyteProxy = false, globalWebcastResponse = undefined) {
         if (this.#isConnecting) {
             throw new Error('Already connecting!');
         }
@@ -139,15 +139,16 @@ class WebcastPushConnection extends EventEmitter {
         }
 
         this.#isConnecting = true;
-
+        console.log(`Connecting...${zyte} ${zyteProxy}`);
         try {
             // roomId already specified?
             if (roomId) {
                 this.#roomId = roomId;
                 this.#clientParams.room_id = roomId;
             } else {
-                await this.#retrieveRoomId();
+                await this.#retrieveRoomId(zyte, zyteProxy);
             }
+            console.log(`Room ID: ${this.#roomId}================`)
 
             // Fetch room info if option enabled
             if (this.#options.fetchRoomInfoOnConnect) {
@@ -164,7 +165,7 @@ class WebcastPushConnection extends EventEmitter {
                 await this.#fetchAvailableGifts();
             }
 
-            await this.#fetchRoomData(true);
+            const webCastResponse = await this.#fetchRoomData(true, zyte, zyteProxy, globalWebcastResponse);
 
             // Sometimes no upgrade to WebSocket is offered by TikTok
             // In that case we use request polling (if enabled and possible)
@@ -181,21 +182,25 @@ class WebcastPushConnection extends EventEmitter {
                     throw new Error('TikTok does not offer a websocket upgrade. Please provide a valid `sessionId` to use request polling instead.');
                 }
 
+                console.log(`Starting polling...`);
                 this.#startFetchRoomPolling();
             }
 
-            this.#isConnected = true;
-
-            let state = this.getState();
-
-            this.emit(ControlEvents.CONNECTED, state);
-            return state;
+            return webCastResponse;
         } catch (err) {
             this.#handleError(err, 'Error while connecting');
             throw err;
         } finally {
             this.#isConnecting = false;
         }
+    }
+
+    setConnected() {
+        this.#isConnected = true;
+        let state = this.getState();
+
+        this.emit(ControlEvents.CONNECTED, state);
+        return state;
     }
 
     /**
@@ -334,9 +339,9 @@ class WebcastPushConnection extends EventEmitter {
         }
     }
 
-    async #retrieveRoomId() {
+    async #retrieveRoomId(zyte = false, zyteProxy = false) {
         try {
-            let mainPageHtml = await this.#httpClient.getMainPage(`@${this.#uniqueStreamerId}/live`);
+            let mainPageHtml = await this.#httpClient.getMainPage(`@${this.#uniqueStreamerId}/live`, zyte);
 
             try {
                 let roomId = getRoomIdFromMainPageHtml(mainPageHtml);
@@ -345,11 +350,16 @@ class WebcastPushConnection extends EventEmitter {
                 this.#clientParams.room_id = roomId;
             } catch (err) {
                 // Use fallback method
-                let roomData = await this.#httpClient.getJsonObjectFromTiktokApi('api-live/user/room/', {
-                    ...this.#clientParams,
-                    uniqueId: this.#uniqueStreamerId,
-                    sourceType: 54,
-                });
+                let roomData = await this.#httpClient.getJsonObjectFromTiktokApi(
+                    'api-live/user/room/', 
+                    {
+                        ...this.#clientParams,
+                        uniqueId: this.#uniqueStreamerId,
+                        sourceType: 54,
+                    },
+                    zyte,
+                    zyteProxy,
+                );
 
                 this.#roomId = roomData.data.user.roomId;
                 this.#clientParams.room_id = roomData.data.user.roomId;
@@ -393,10 +403,24 @@ class WebcastPushConnection extends EventEmitter {
         }
     }
 
-    async #fetchRoomData(isInitial) {
-        let webcastResponse = await this.#httpClient.getDeserializedObjectFromWebcastApi('im/fetch/', this.#clientParams, 'WebcastResponse', isInitial);
+    async #fetchRoomData(isInitial, zyte = false, zyteProxy = false, globalWebcastResponse = undefined) {
+        let webcastResponse;
+        if (globalWebcastResponse !== undefined) {
+            console.log(`Using globalWebcastResponse...${JSON.stringify(webcastResponse)}`);
+            webcastResponse = globalWebcastResponse;
+        } else {
+            console.log(`Fetching room data...${isInitial} ${zyte} ${zyteProxy}`);
+            webcastResponse = await this.#httpClient.getDeserializedObjectFromWebcastApi(
+                'im/fetch/',
+                this.#clientParams,
+                'WebcastResponse',
+                isInitial,
+                zyte,
+                zyteProxy,
+            );
+        }
         let upgradeToWsOffered = !!webcastResponse.wsUrl && !!webcastResponse.wsParam;
-
+        console.log(`Upgrade to websocket offered: ${upgradeToWsOffered}`);
         if (!webcastResponse.cursor) {
             if (isInitial) {
                 throw new Error('Missing cursor in initial fetch response.');
@@ -412,6 +436,7 @@ class WebcastPushConnection extends EventEmitter {
         if (isInitial) {
             // Upgrade to Websocket offered? => Try upgrade
             if (this.#options.enableWebsocketUpgrade && upgradeToWsOffered) {
+                console.log(`Upgrading to websocket...`);
                 await this.#tryUpgradeToWebsocket(webcastResponse);
             }
         }
@@ -420,8 +445,8 @@ class WebcastPushConnection extends EventEmitter {
         if (isInitial && !this.#options.processInitialData) {
             return;
         }
-
         this.#processWebcastResponse(webcastResponse);
+        return webcastResponse;
     }
 
     async #tryUpgradeToWebsocket(webcastResponse) {
@@ -446,6 +471,7 @@ class WebcastPushConnection extends EventEmitter {
 
     async #setupWebsocket(wsUrl, wsParams) {
         return new Promise((resolve, reject) => {
+            console.log(`setupWebsocket... ${wsUrl}`);
             this.#websocket = new WebcastWebsocket(wsUrl, this.#httpClient.cookieJar, this.#clientParams, wsParams, this.#options.websocketHeaders, this.#options.websocketOptions);
 
             this.#websocket.on('connect', (wsConnection) => {

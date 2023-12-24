@@ -12,7 +12,8 @@
     "format": "prettier --write \"src/**/*.js\" \"app/**/*.ts\"",
     "copy-proto": "cp -R src/proto dist/src/proto",
     "build": "tsc && npm run copy-proto",
-    "start": "npm run build && NODE_OPTIONS=--enable-source-maps node dist/app/index.js"
+    "start": "npm run build && NODE_OPTIONS=--enable-source-maps node dist/app/index.js",
+    "start-single": "npm run build && NODE_OPTIONS=--enable-source-maps node dist/app/index-single.js"
   },
   "repository": {
     "type": "git",
@@ -54,6 +55,7 @@
   "homepage": "https://github.com/zerodytrash/TikTok-Live-Connector#readme",
   "dependencies": {
     "axios": "^0.25.0",
+    "postman-request": "^2.88.1-postman.33",
     "protobufjs": "^6.11.2",
     "websocket": "^1.0.34"
   },
